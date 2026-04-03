@@ -6,8 +6,8 @@ export default function PipelinePage() {
     <div className="page-stack">
       <PageIntro
         eyebrow="Pipeline"
-        title="Sales pipeline"
-        description="Track deals, contacts, stages, estimated value, and close dates in your Supabase-backed rep pipeline."
+        title="Lightweight deal tracker"
+        description="Track active deals with just the essentials, then capture structured win data whenever a deal closes won."
       />
       <PipelineManager />
     </div>

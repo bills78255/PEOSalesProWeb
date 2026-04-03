@@ -736,6 +736,48 @@ label {
   margin: 0;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 31, 49, 0.46);
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  z-index: 40;
+}
+
+.modal-panel {
+  width: min(100%, 960px);
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid rgba(170, 194, 216, 0.5);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 28px 60px rgba(18, 49, 80, 0.18);
+  padding: 1.5rem;
+}
+
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--brand-deep);
+  padding: 0.75rem 1rem;
+  box-shadow: none;
+}
+
+.chip-active {
+  background: linear-gradient(135deg, var(--brand-deep) 0%, var(--brand) 100%);
+  color: white;
+  border-color: transparent;
+}
+
 @media (max-width: 1080px) {
   .hero,
   .marketing-grid,

@@ -1,77 +1,164 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-type PipelineStage = "new" | "discovery" | "quoted" | "proposal" | "won" | "lost";
+type PipelineStage = "new" | "qualified" | "proposal" | "closed_won" | "closed_lost";
 
 type PipelineRecord = {
   id: string;
-  owner_id: string;
-  account_name: string;
-  contact_name: string;
-  contact_email: string;
+  owner_id: string | null;
+  deal_name: string;
   stage: PipelineStage;
-  source: string;
-  estimated_payroll: number | null;
-  estimated_headcount: number | null;
-  estimated_value: number | null;
-  close_date: string | null;
-  notes: string;
+  crm_link: string;
+  estimated_commission: number | null;
+  referral_source: string;
   created_at: string;
   updated_at: string;
 };
 
+type ClosedDealAnalysisRecord = {
+  id: string;
+  deal_id: string;
+  industry: string;
+  company_size: string;
+  sales_cycle_days: number | null;
+  number_of_meetings: number | null;
+  number_of_stakeholders: number | null;
+  competitors_involved: string[];
+  winner: string;
+  primary_win_reason: string;
+  win_notes: string;
+  top_objections: string[];
+  referral_type: string;
+  referral_name: string;
+};
+
 type PipelineFormState = {
-  accountName: string;
-  contactName: string;
-  contactEmail: string;
+  dealName: string;
   stage: PipelineStage;
-  source: string;
-  estimatedPayroll: string;
-  estimatedHeadcount: string;
-  estimatedValue: string;
-  closeDate: string;
-  notes: string;
+  crmLink: string;
+  estimatedCommission: string;
+  referralSource: string;
+};
+
+type AnalysisFormState = {
+  industry: string;
+  companySize: string;
+  salesCycleDays: string;
+  numberOfMeetings: string;
+  numberOfStakeholders: string;
+  competitorsInvolved: string[];
+  winner: string;
+  primaryWinReason: string;
+  winNotes: string;
+  topObjections: string[];
+  referralType: string;
+  referralName: string;
 };
 
 const initialFormState: PipelineFormState = {
-  accountName: "",
-  contactName: "",
-  contactEmail: "",
+  dealName: "",
   stage: "new",
-  source: "",
-  estimatedPayroll: "",
-  estimatedHeadcount: "",
-  estimatedValue: "",
-  closeDate: "",
-  notes: ""
+  crmLink: "",
+  estimatedCommission: "",
+  referralSource: ""
+};
+
+const initialAnalysisState: AnalysisFormState = {
+  industry: "",
+  companySize: "",
+  salesCycleDays: "",
+  numberOfMeetings: "",
+  numberOfStakeholders: "",
+  competitorsInvolved: [],
+  winner: "us",
+  primaryWinReason: "",
+  winNotes: "",
+  topObjections: [],
+  referralType: "",
+  referralName: ""
 };
 
 const stageOptions: Array<{ value: PipelineStage; label: string }> = [
   { value: "new", label: "New" },
-  { value: "discovery", label: "Discovery" },
-  { value: "quoted", label: "Quoted" },
+  { value: "qualified", label: "Qualified" },
   { value: "proposal", label: "Proposal" },
-  { value: "won", label: "Won" },
-  { value: "lost", label: "Lost" }
+  { value: "closed_won", label: "Closed Won" },
+  { value: "closed_lost", label: "Closed Lost" }
 ];
+
+const industryOptions = [
+  "Construction",
+  "Manufacturing",
+  "Healthcare",
+  "Professional Services",
+  "Hospitality",
+  "Transportation",
+  "Retail",
+  "Other"
+];
+
+const companySizeOptions = [
+  "1-24 employees",
+  "25-49 employees",
+  "50-99 employees",
+  "100-249 employees",
+  "250+ employees",
+  "Payroll under $500k",
+  "$500k-$2M payroll",
+  "$2M+ payroll"
+];
+
+const competitorOptions = ["ADP", "Paychex", "Insperity", "TriNet", "Justworks", "Other"];
+const winReasonOptions = [
+  "Better pricing",
+  "Stronger service model",
+  "Faster implementation",
+  "Workers' comp solution",
+  "Benefits value",
+  "Referral trust",
+  "Stronger relationship"
+];
+const objectionOptions = [
+  "Happy with current provider",
+  "Price",
+  "Timing",
+  "Switching risk",
+  "Need more internal buy-in",
+  "Already using ADP",
+  "Benefits disruption"
+];
+const referralTypeOptions = ["CPA", "Broker", "Insurance Agent", "Bank", "Private Equity", "Client Referral", "Other"];
 
 type PipelineManagerProps = {
   mode?: "shared" | "admin";
 };
 
+function toggleSelection(items: string[], value: string) {
+  return items.includes(value) ? items.filter((item) => item !== value) : [...items, value];
+}
+
 export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
   const supabase = createSupabaseBrowserClient();
   const [records, setRecords] = useState<PipelineRecord[]>([]);
   const [form, setForm] = useState<PipelineFormState>(initialFormState);
+  const [analysisForm, setAnalysisForm] = useState<AnalysisFormState>(initialAnalysisState);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAnalysis, setSavingAnalysis] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analysisDeal, setAnalysisDeal] = useState<PipelineRecord | null>(null);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+
+  const sortedRecords = useMemo(
+    () => [...records].sort((left, right) => new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()),
+    [records]
+  );
 
   async function loadCurrentUser() {
     const {
@@ -90,9 +177,7 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
 
     const { data, error: fetchError } = await supabase
       .from("opportunities")
-      .select(
-        "id,owner_id,account_name,contact_name,contact_email,stage,source,estimated_payroll,estimated_headcount,estimated_value,close_date,notes,created_at,updated_at"
-      )
+      .select("id,owner_id,deal_name,stage,crm_link,estimated_commission,referral_source,created_at,updated_at")
       .order("updated_at", { ascending: false });
 
     setLoading(false);
@@ -116,7 +201,7 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
       }
     }
 
-    initialize();
+    void initialize();
   }, []);
 
   function resetForm() {
@@ -124,21 +209,64 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
     setEditingId(null);
   }
 
+  function resetAnalysis() {
+    setAnalysisForm(initialAnalysisState);
+    setAnalysisDeal(null);
+    setAnalysisOpen(false);
+  }
+
   function beginEdit(record: PipelineRecord) {
     setEditingId(record.id);
     setMessage(null);
     setError(null);
     setForm({
-      accountName: record.account_name,
-      contactName: record.contact_name,
-      contactEmail: record.contact_email,
+      dealName: record.deal_name,
       stage: record.stage,
-      source: record.source,
-      estimatedPayroll: record.estimated_payroll?.toString() ?? "",
-      estimatedHeadcount: record.estimated_headcount?.toString() ?? "",
-      estimatedValue: record.estimated_value?.toString() ?? "",
-      closeDate: record.close_date ?? "",
-      notes: record.notes
+      crmLink: record.crm_link,
+      estimatedCommission: record.estimated_commission?.toString() ?? "",
+      referralSource: record.referral_source
+    });
+  }
+
+  async function openAnalyzer(deal: PipelineRecord) {
+    setAnalysisDeal(deal);
+    setAnalysisOpen(true);
+    setError(null);
+
+    const { data, error: analysisError } = await supabase
+      .from("closed_deal_analysis")
+      .select("*")
+      .eq("deal_id", deal.id)
+      .maybeSingle();
+
+    if (analysisError) {
+      setError(analysisError.message);
+      setAnalysisForm(initialAnalysisState);
+      return;
+    }
+
+    if (!data) {
+      setAnalysisForm({
+        ...initialAnalysisState,
+        referralName: deal.referral_source
+      });
+      return;
+    }
+
+    const analysis = data as ClosedDealAnalysisRecord;
+    setAnalysisForm({
+      industry: analysis.industry,
+      companySize: analysis.company_size,
+      salesCycleDays: analysis.sales_cycle_days?.toString() ?? "",
+      numberOfMeetings: analysis.number_of_meetings?.toString() ?? "",
+      numberOfStakeholders: analysis.number_of_stakeholders?.toString() ?? "",
+      competitorsInvolved: analysis.competitors_involved ?? [],
+      winner: analysis.winner,
+      primaryWinReason: analysis.primary_win_reason,
+      winNotes: analysis.win_notes,
+      topObjections: analysis.top_objections ?? [],
+      referralType: analysis.referral_type,
+      referralName: analysis.referral_name
     });
   }
 
@@ -149,21 +277,16 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
 
     const payload = {
       owner_id: currentUserId,
-      account_name: String(formData.get("accountName") || "").trim(),
-      contact_name: String(formData.get("contactName") || "").trim(),
-      contact_email: String(formData.get("contactEmail") || "").trim(),
+      deal_name: String(formData.get("dealName") || "").trim(),
       stage: String(formData.get("stage") || "new") as PipelineStage,
-      source: String(formData.get("source") || "").trim(),
-      estimated_payroll: formData.get("estimatedPayroll") ? Number(formData.get("estimatedPayroll")) : null,
-      estimated_headcount: formData.get("estimatedHeadcount") ? Number(formData.get("estimatedHeadcount")) : null,
-      estimated_value: formData.get("estimatedValue") ? Number(formData.get("estimatedValue")) : null,
-      close_date: String(formData.get("closeDate") || "").trim() || null,
-      notes: String(formData.get("notes") || "").trim()
+      crm_link: String(formData.get("crmLink") || "").trim(),
+      estimated_commission: formData.get("estimatedCommission") ? Number(formData.get("estimatedCommission")) : null,
+      referral_source: String(formData.get("referralSource") || "").trim()
     };
 
-    if (!payload.account_name) {
+    if (!payload.deal_name) {
       setSaving(false);
-      setError("Account name is required.");
+      setError("Deal name is required.");
       return;
     }
 
@@ -174,10 +297,10 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
     }
 
     const query = editingId
-      ? supabase.from("opportunities").update(payload).eq("id", editingId)
-      : supabase.from("opportunities").insert(payload);
+      ? supabase.from("opportunities").update(payload).eq("id", editingId).select("*").single()
+      : supabase.from("opportunities").insert(payload).select("*").single();
 
-    const { error: saveError } = await query;
+    const { data, error: saveError } = await query;
 
     setSaving(false);
 
@@ -186,13 +309,18 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
       return;
     }
 
+    const savedDeal = data as PipelineRecord;
     resetForm();
-    setMessage(editingId ? "Pipeline record updated." : "Deal added to pipeline.");
+    setMessage(editingId ? "Pipeline deal updated." : "Deal added to pipeline.");
     await loadPipeline();
+
+    if (savedDeal.stage === "closed_won") {
+      await openAnalyzer(savedDeal);
+    }
   }
 
   async function handleDelete(id: string) {
-    const confirmed = window.confirm("Delete this pipeline record?");
+    const confirmed = window.confirm("Delete this pipeline deal?");
     if (!confirmed) return;
 
     setError(null);
@@ -207,8 +335,44 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
 
     if (editingId === id) resetForm();
 
-    setMessage("Pipeline record removed.");
+    setMessage("Pipeline deal removed.");
     await loadPipeline();
+  }
+
+  async function handleAnalysisSave() {
+    if (!analysisDeal) return;
+
+    setSavingAnalysis(true);
+    setError(null);
+    setMessage(null);
+
+    const payload = {
+      deal_id: analysisDeal.id,
+      industry: analysisForm.industry,
+      company_size: analysisForm.companySize,
+      sales_cycle_days: analysisForm.salesCycleDays ? Number(analysisForm.salesCycleDays) : null,
+      number_of_meetings: analysisForm.numberOfMeetings ? Number(analysisForm.numberOfMeetings) : null,
+      number_of_stakeholders: analysisForm.numberOfStakeholders ? Number(analysisForm.numberOfStakeholders) : null,
+      competitors_involved: analysisForm.competitorsInvolved,
+      winner: analysisForm.winner,
+      primary_win_reason: analysisForm.primaryWinReason,
+      win_notes: analysisForm.winNotes,
+      top_objections: analysisForm.topObjections,
+      referral_type: analysisForm.referralType,
+      referral_name: analysisForm.referralName
+    };
+
+    const { error: saveError } = await supabase.from("closed_deal_analysis").upsert(payload, { onConflict: "deal_id" });
+
+    setSavingAnalysis(false);
+
+    if (saveError) {
+      setError(saveError.message);
+      return;
+    }
+
+    setMessage("Closed deal analysis saved.");
+    resetAnalysis();
   }
 
   return (
@@ -217,37 +381,18 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
         <section className="card">
           <div className="card-head">
             <div>
-              <p className="eyebrow">{editingId ? "Edit Pipeline Record" : "Add Deal"}</p>
-              <h3>{editingId ? "Update deal in pipeline" : "Create a new pipeline record"}</h3>
+              <p className="eyebrow">{editingId ? "Edit Deal" : "Add Deal"}</p>
+              <h3>{editingId ? "Update lightweight pipeline deal" : "Create a new pipeline deal"}</h3>
             </div>
           </div>
           <form className="admin-form-grid" action={handleSubmit}>
             <label>
-              Account name
+              Deal name
               <input
-                name="accountName"
-                value={form.accountName}
-                onChange={(event) => setForm((current) => ({ ...current, accountName: event.target.value }))}
+                name="dealName"
+                value={form.dealName}
+                onChange={(event) => setForm((current) => ({ ...current, dealName: event.target.value }))}
                 required
-              />
-            </label>
-            <label>
-              Contact name
-              <input
-                name="contactName"
-                value={form.contactName}
-                onChange={(event) => setForm((current) => ({ ...current, contactName: event.target.value }))}
-                placeholder="Decision maker"
-              />
-            </label>
-            <label>
-              Contact email
-              <input
-                name="contactEmail"
-                type="email"
-                value={form.contactEmail}
-                onChange={(event) => setForm((current) => ({ ...current, contactEmail: event.target.value }))}
-                placeholder="contact@account.com"
               />
             </label>
             <label>
@@ -265,72 +410,42 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
               </select>
             </label>
             <label>
-              Source
+              CRM link
               <input
-                name="source"
-                value={form.source}
-                onChange={(event) => setForm((current) => ({ ...current, source: event.target.value }))}
-                placeholder="Referral, outbound, partner"
+                name="crmLink"
+                type="url"
+                value={form.crmLink}
+                onChange={(event) => setForm((current) => ({ ...current, crmLink: event.target.value }))}
+                placeholder="https://hubspot.com/..."
               />
             </label>
             <label>
-              Estimated payroll
+              Estimated commission
               <input
-                name="estimatedPayroll"
+                name="estimatedCommission"
                 type="number"
-                value={form.estimatedPayroll}
-                onChange={(event) => setForm((current) => ({ ...current, estimatedPayroll: event.target.value }))}
-                placeholder="750000"
+                value={form.estimatedCommission}
+                onChange={(event) => setForm((current) => ({ ...current, estimatedCommission: event.target.value }))}
+                placeholder="2500"
               />
             </label>
-            <label>
-              Estimated headcount
+            <label className="admin-form-span-2">
+              Referral source
               <input
-                name="estimatedHeadcount"
-                type="number"
-                value={form.estimatedHeadcount}
-                onChange={(event) => setForm((current) => ({ ...current, estimatedHeadcount: event.target.value }))}
-                placeholder="85"
+                name="referralSource"
+                value={form.referralSource}
+                onChange={(event) => setForm((current) => ({ ...current, referralSource: event.target.value }))}
+                placeholder="CPA partner, broker, outbound, client referral"
               />
             </label>
-            <label>
-              Estimated value
-              <input
-                name="estimatedValue"
-                type="number"
-                value={form.estimatedValue}
-                onChange={(event) => setForm((current) => ({ ...current, estimatedValue: event.target.value }))}
-                placeholder="25000"
-              />
-            </label>
-            <label>
-              Close date
-              <input
-                name="closeDate"
-                type="date"
-                value={form.closeDate}
-                onChange={(event) => setForm((current) => ({ ...current, closeDate: event.target.value }))}
-              />
-            </label>
-            <label className="admin-form-span">
-              Notes
-              <textarea
-                name="notes"
-                rows={4}
-                value={form.notes}
-                onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
-                placeholder="Important context, next steps, or rep notes"
-              />
-            </label>
-            {error ? <p className="form-message error">{error}</p> : null}
-            {message ? <p className="form-message success">{message}</p> : null}
-            <div className="admin-form-actions">
+
+            <div className="admin-form-actions admin-form-span-2">
               <button type="submit" disabled={saving}>
-                {saving ? (editingId ? "Saving..." : "Creating...") : editingId ? "Save Changes" : "Add Deal"}
+                {saving ? "Saving..." : editingId ? "Update Deal" : "Save Deal"}
               </button>
               {editingId ? (
-                <button type="button" className="secondary-button" onClick={resetForm}>
-                  Cancel Edit
+                <button type="button" className="ghost-button" onClick={resetForm}>
+                  Cancel
                 </button>
               ) : null}
             </div>
@@ -340,53 +455,240 @@ export function PipelineManager({ mode = "shared" }: PipelineManagerProps) {
         <section className="card">
           <div className="card-head">
             <div>
-              <p className="eyebrow">{mode === "admin" ? "Pipeline Oversight" : "My Pipeline"}</p>
-              <h3>{mode === "admin" ? "Current pipeline records" : "Your active pipeline"}</h3>
+              <p className="eyebrow">{mode === "admin" ? "Admin Pipeline" : "Your Pipeline"}</p>
+              <h3>Active deal tracker</h3>
             </div>
           </div>
-          {loading ? (
-            <p className="helper-text">Loading pipeline...</p>
-          ) : records.length ? (
+          {loading ? <p>Loading pipeline...</p> : null}
+          {error ? <p className="form-message error">{error}</p> : null}
+          {message ? <p className="form-message success">{message}</p> : null}
+          {!loading && !sortedRecords.length ? (
+            <p className="helper-text">No deals yet. Start by adding your first lightweight pipeline record.</p>
+          ) : (
             <div className="admin-opportunity-list">
-              {records.map((record) => (
+              {sortedRecords.map((record) => (
                 <article key={record.id} className="admin-opportunity-row">
                   <div>
-                    <strong>{record.account_name}</strong>
+                    <strong>{record.deal_name}</strong>
                     <p>
-                      {labelForStage(record.stage)}
-                      {record.source ? ` · ${record.source}` : ""}
+                      {stageOptions.find((option) => option.value === record.stage)?.label ?? record.stage}
+                      {record.referral_source ? ` · ${record.referral_source}` : ""}
                     </p>
                     <small>
-                      {record.contact_name ? `${record.contact_name}` : "No contact"}
-                      {record.contact_email ? ` · ${record.contact_email}` : ""}
-                    </small>
-                    <small>
-                      {record.estimated_value ? `$${record.estimated_value.toLocaleString()}` : "No value"}
-                      {record.estimated_headcount ? ` · ${record.estimated_headcount} lives` : ""}
-                      {record.estimated_payroll ? ` · $${record.estimated_payroll.toLocaleString()} payroll` : ""}
-                      {record.close_date ? ` · closes ${record.close_date}` : ""}
+                      {record.estimated_commission != null
+                        ? `Est. commission $${record.estimated_commission.toLocaleString()}`
+                        : "No estimated commission yet"}
                     </small>
                   </div>
                   <div className="admin-opportunity-actions">
+                    {record.crm_link ? (
+                      <a href={record.crm_link} target="_blank" rel="noreferrer" className="ghost-link">
+                        CRM
+                      </a>
+                    ) : null}
                     <button type="button" className="secondary-button" onClick={() => beginEdit(record)}>
                       Edit
                     </button>
-                    <button type="button" className="secondary-button" onClick={() => handleDelete(record.id)}>
-                      Remove
+                    {record.stage === "closed_won" ? (
+                      <button type="button" className="ghost-button" onClick={() => void openAnalyzer(record)}>
+                        Analyze
+                      </button>
+                    ) : null}
+                    <button type="button" className="ghost-button" onClick={() => void handleDelete(record.id)}>
+                      Delete
                     </button>
                   </div>
                 </article>
               ))}
             </div>
-          ) : (
-            <p className="helper-text">No deals in the pipeline yet.</p>
           )}
         </section>
       </section>
+
+      {analysisOpen && analysisDeal ? (
+        <div className="modal-backdrop">
+          <div className="modal-panel">
+            <div className="card-head">
+              <div>
+                <p className="eyebrow">Closed Deal Analyzer</p>
+                <h3>{analysisDeal.deal_name}</h3>
+              </div>
+              <button type="button" className="ghost-button" onClick={resetAnalysis}>
+                Close
+              </button>
+            </div>
+
+            <div className="admin-form-grid">
+              <label>
+                Industry
+                <select
+                  value={analysisForm.industry}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, industry: event.target.value }))}
+                >
+                  <option value="">Select industry</option>
+                  {industryOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Company size
+                <select
+                  value={analysisForm.companySize}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, companySize: event.target.value }))}
+                >
+                  <option value="">Select size</option>
+                  {companySizeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Sales cycle days
+                <input
+                  type="number"
+                  value={analysisForm.salesCycleDays}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, salesCycleDays: event.target.value }))}
+                  placeholder="45"
+                />
+              </label>
+              <label>
+                Number of meetings
+                <input
+                  type="number"
+                  value={analysisForm.numberOfMeetings}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, numberOfMeetings: event.target.value }))}
+                  placeholder="3"
+                />
+              </label>
+              <label>
+                Stakeholders
+                <input
+                  type="number"
+                  value={analysisForm.numberOfStakeholders}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, numberOfStakeholders: event.target.value }))}
+                  placeholder="2"
+                />
+              </label>
+              <label>
+                Primary win reason
+                <select
+                  value={analysisForm.primaryWinReason}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, primaryWinReason: event.target.value }))}
+                >
+                  <option value="">Select reason</option>
+                  {winReasonOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Referral type
+                <select
+                  value={analysisForm.referralType}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, referralType: event.target.value }))}
+                >
+                  <option value="">Select referral type</option>
+                  {referralTypeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Referral name
+                <input
+                  value={analysisForm.referralName}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, referralName: event.target.value }))}
+                  placeholder="Optional"
+                />
+              </label>
+              <label>
+                Winner
+                <select
+                  value={analysisForm.winner}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, winner: event.target.value }))}
+                >
+                  <option value="us">Us</option>
+                  <option value="ADP">ADP</option>
+                  <option value="Paychex">Paychex</option>
+                  <option value="Insperity">Insperity</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <label className="admin-form-span-2">
+                Win notes
+                <textarea
+                  rows={3}
+                  value={analysisForm.winNotes}
+                  onChange={(event) => setAnalysisForm((current) => ({ ...current, winNotes: event.target.value }))}
+                  placeholder="Optional notes about the outcome"
+                />
+              </label>
+            </div>
+
+            <div className="admin-section-grid">
+              <div>
+                <p className="eyebrow">Competitors Involved</p>
+                <div className="chip-grid">
+                  {competitorOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={analysisForm.competitorsInvolved.includes(option) ? "chip chip-active" : "chip"}
+                      onClick={() =>
+                        setAnalysisForm((current) => ({
+                          ...current,
+                          competitorsInvolved: toggleSelection(current.competitorsInvolved, option)
+                        }))
+                      }
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="eyebrow">Top Objections</p>
+                <div className="chip-grid">
+                  {objectionOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={analysisForm.topObjections.includes(option) ? "chip chip-active" : "chip"}
+                      onClick={() =>
+                        setAnalysisForm((current) => ({
+                          ...current,
+                          topObjections: toggleSelection(current.topObjections, option)
+                        }))
+                      }
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="admin-form-actions">
+              <button type="button" onClick={() => void handleAnalysisSave()} disabled={savingAnalysis}>
+                {savingAnalysis ? "Saving..." : "Save Analysis"}
+              </button>
+              <button type="button" className="ghost-button" onClick={resetAnalysis}>
+                Skip for now
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
-}
-
-function labelForStage(stage: PipelineStage) {
-  return stageOptions.find((option) => option.value === stage)?.label ?? stage;
 }
