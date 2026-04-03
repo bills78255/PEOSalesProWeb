@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { roleLabel, type AppRole } from "@/lib/auth/roles";
@@ -9,8 +10,8 @@ type AppSidebarProps = {
 };
 
 export function AppSidebar({ role, name }: AppSidebarProps) {
-  const primaryItems = itemsForRole(primaryNav, role);
-  const adminItems = itemsForRole(adminNav, role);
+  const primaryItems: Array<{ href: Route; label: string }> = itemsForRole(primaryNav, role);
+  const adminItems: Array<{ href: Route; label: string }> = itemsForRole(adminNav, role);
 
   return (
     <aside className="app-sidebar">
