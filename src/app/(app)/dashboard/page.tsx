@@ -170,39 +170,6 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <Card title="Temporary Debug" eyebrow="User Scope">
-        <ul className="stack-list">
-          <li>
-            <strong>User ID</strong>
-            <span>{userID}</span>
-          </li>
-          <li>
-            <strong>Role</strong>
-            <span>{profile?.role ?? "unknown"}</span>
-          </li>
-          <li>
-            <strong>Opportunity Rows Returned</strong>
-            <span>{String(opportunities.length)}</span>
-          </li>
-          <li>
-            <strong>Open Deal Rows Returned</strong>
-            <span>{String(openDeals.length)}</span>
-          </li>
-          <li>
-            <strong>Wins Rows Returned</strong>
-            <span>{String(wins.length)}</span>
-          </li>
-          <li>
-            <strong>Quiz Result Rows Returned</strong>
-            <span>{String(quizResults.length)}</span>
-          </li>
-          <li>
-            <strong>Published Lessons Count</strong>
-            <span>{String(publishedLessons.length)}</span>
-          </li>
-        </ul>
-      </Card>
-
       {errors.length ? (
         <Card title="Some dashboard data could not be loaded">
           <p>{errors[0]}</p>
