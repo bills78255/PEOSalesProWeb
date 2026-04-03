@@ -616,6 +616,126 @@ label {
   justify-self: start;
 }
 
+.training-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.training-card-link {
+  display: block;
+}
+
+.training-card {
+  overflow: hidden;
+  border: 1px solid rgba(170, 194, 216, 0.5);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.training-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 22px 42px rgba(18, 49, 80, 0.11);
+}
+
+.training-card-image {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+  background: linear-gradient(135deg, rgba(12, 126, 196, 0.14), rgba(28, 66, 102, 0.18));
+}
+
+.training-card-image--placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--brand-deep);
+  font-weight: 700;
+}
+
+.training-card-body {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem;
+}
+
+.training-card-body h3,
+.training-detail-copy h1 {
+  margin: 0;
+  font-family: "Roboto Slab", Georgia, serif;
+}
+
+.training-card-body p,
+.training-detail-copy p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.training-back-link {
+  justify-self: start;
+}
+
+.training-detail-hero {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.training-detail-image {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(170, 194, 216, 0.5);
+  box-shadow: var(--shadow);
+}
+
+.training-detail-copy {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(170, 194, 216, 0.5);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.training-detail-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.25rem;
+}
+
+.training-content-frame {
+  width: 100%;
+  min-height: 720px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: white;
+}
+
+.training-lesson-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.training-lesson-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.training-lesson-card p {
+  margin: 0;
+}
+
 @media (max-width: 1080px) {
   .hero,
   .marketing-grid,
@@ -636,6 +756,12 @@ label {
   .marketplace-filters,
   .marketplace-detail-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .training-grid,
+  .training-detail-hero,
+  .training-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .marketplace-filter-search {
@@ -683,6 +809,12 @@ label {
   .marketplace-detail-grid {
     grid-template-columns: 1fr;
     flex-direction: column;
+  }
+
+  .training-grid,
+  .training-detail-hero,
+  .training-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .marketplace-filter-search {

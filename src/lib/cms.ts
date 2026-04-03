@@ -2,6 +2,7 @@ export type ContentStatus = "draft" | "published" | "archived";
 
 export type TrainingCategory =
   | "peo_basics"
+  | "product_knowledge"
   | "pricing"
   | "workers_comp"
   | "benefits"
@@ -36,9 +37,12 @@ export type ArticleCategory =
 export type TrainingRecord = {
   id: string;
   title: string;
+  slug: string;
   summary: string;
   category: TrainingCategory;
-  status: ContentStatus;
+  cover_image_url: string;
+  content_url: string;
+  status: Extract<ContentStatus, "draft" | "published">;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -49,8 +53,9 @@ export type TrainingLessonRecord = {
   training_id: string;
   title: string;
   body: string;
+  video_url: string | null;
   action_step: string;
-  status: ContentStatus;
+  status: Extract<ContentStatus, "draft" | "published">;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -119,6 +124,7 @@ export const contentStatusOptions: Array<{ value: ContentStatus; label: string }
 
 export const trainingCategoryOptions: Array<{ value: TrainingCategory; label: string }> = [
   { value: "peo_basics", label: "PEO Basics" },
+  { value: "product_knowledge", label: "Product Knowledge" },
   { value: "pricing", label: "Pricing" },
   { value: "workers_comp", label: "Workers' Comp" },
   { value: "benefits", label: "Benefits" },
@@ -164,6 +170,19 @@ export function contentStatusLabel(status: ContentStatus) {
 
 export function trainingCategoryLabel(category: TrainingCategory | string) {
   return optionLabel(trainingCategoryOptions, category);
+}
+
+export function publicationLabel(status: string) {
+  return status === "published" ? "Published" : "Draft";
+}
+
+export function slugify(input: string) {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 export function scriptCategoryLabel(category: ScriptCategory | string) {

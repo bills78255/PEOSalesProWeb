@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 
 import { Card } from "@/components/ui/card";
 import {
-  contentStatusLabel,
   contentStatusOptions,
+  publicationLabel,
+  slugify,
   trainingCategoryLabel,
   trainingCategoryOptions,
-  type ContentStatus,
   type TrainingLessonRecord,
   type TrainingRecord
 } from "@/lib/cms";
@@ -18,27 +18,33 @@ type TrainingFormState = {
   title: string;
   summary: string;
   category: string;
-  status: ContentStatus;
+  coverImageURL: string;
+  contentURL: string;
+  status: "draft" | "published";
 };
 
 type LessonFormState = {
   title: string;
   body: string;
-  action_step: string;
-  status: ContentStatus;
+  videoURL: string;
+  actionStep: string;
+  status: "draft" | "published";
 };
 
 const emptyTrainingForm: TrainingFormState = {
   title: "",
   summary: "",
-  category: trainingCategoryOptions[0]?.value ?? "peo_basics",
+  category: trainingCategoryOptions[0]?.value ?? "prospecting",
+  coverImageURL: "",
+  contentURL: "",
   status: "draft"
 };
 
 const emptyLessonForm: LessonFormState = {
   title: "",
   body: "",
-  action_step: "",
+  videoURL: "",
+  actionStep: "",
   status: "draft"
 };
 
@@ -70,6 +76,8 @@ export function TrainingsCMS() {
         title: selectedTraining.title,
         summary: selectedTraining.summary,
         category: selectedTraining.category,
+        coverImageURL: selectedTraining.cover_image_url,
+        contentURL: selectedTraining.content_url,
         status: selectedTraining.status
       });
     } else {
@@ -82,7 +90,8 @@ export function TrainingsCMS() {
       setLessonForm({
         title: selectedLesson.title,
         body: selectedLesson.body,
-        action_step: selectedLesson.action_step,
+        videoURL: selectedLesson.video_url ?? "",
+        actionStep: selectedLesson.action_step,
         status: selectedLesson.status
       });
     } else {
@@ -97,11 +106,7 @@ export function TrainingsCMS() {
     const supabase = createSupabaseBrowserClient();
     const [trainingsResult, lessonsResult] = await Promise.all([
       supabase.from("trainings").select("*").order("sort_order", { ascending: true }).order("updated_at", { ascending: false }),
-      supabase
-        .from("training_lessons")
-        .select("*")
-        .order("sort_order", { ascending: true })
-        .order("updated_at", { ascending: false })
+      supabase.from("training_lessons").select("*").order("sort_order", { ascending: true }).order("updated_at", { ascending: false })
     ]);
 
     if (trainingsResult.error) {
@@ -140,7 +145,7 @@ export function TrainingsCMS() {
     setError(null);
   }
 
-  async function saveTraining(nextStatus?: ContentStatus) {
+  async function saveTraining(nextStatus?: "draft" | "published") {
     clearMessages();
 
     if (!trainingForm.title.trim()) {
@@ -148,12 +153,20 @@ export function TrainingsCMS() {
       return;
     }
 
+    if (!trainingForm.contentURL.trim()) {
+      setError("Content URL is required so reps can view the Canva or hosted file.");
+      return;
+    }
+
     setSaving(true);
     const supabase = createSupabaseBrowserClient();
     const payload = {
       title: trainingForm.title.trim(),
+      slug: slugify(trainingForm.title),
       summary: trainingForm.summary.trim(),
       category: trainingForm.category,
+      cover_image_url: trainingForm.coverImageURL.trim(),
+      content_url: trainingForm.contentURL.trim(),
       status: nextStatus ?? trainingForm.status
     };
 
@@ -175,7 +188,7 @@ export function TrainingsCMS() {
     if (!selectedTraining) {
       setSelectedTrainingID(null);
     }
-    setMessage(selectedTraining ? "Training module updated." : "Training module created.");
+    setMessage(selectedTraining ? "Training updated." : "Training created.");
     await loadContent();
   }
 
@@ -195,7 +208,8 @@ export function TrainingsCMS() {
       setSelectedTrainingID(null);
       setSelectedLessonID(null);
     }
-    setMessage("Training module deleted.");
+
+    setMessage("Training deleted.");
     await loadContent();
   }
 
@@ -220,18 +234,18 @@ export function TrainingsCMS() {
     setSaving(false);
 
     if (first.error || second.error) {
-      setError(first.error?.message ?? second.error?.message ?? "Unable to reorder training modules.");
+      setError(first.error?.message ?? second.error?.message ?? "Unable to reorder trainings.");
       return;
     }
 
     await loadContent();
   }
 
-  async function saveLesson(nextStatus?: ContentStatus) {
+  async function saveLesson(nextStatus?: "draft" | "published") {
     clearMessages();
 
     if (!selectedTrainingID) {
-      setError("Select a training module before creating lessons.");
+      setError("Select a training before creating lessons.");
       return;
     }
 
@@ -246,7 +260,8 @@ export function TrainingsCMS() {
       training_id: selectedTrainingID,
       title: lessonForm.title.trim(),
       body: lessonForm.body.trim(),
-      action_step: lessonForm.action_step.trim(),
+      video_url: lessonForm.videoURL.trim() || null,
+      action_step: lessonForm.actionStep.trim(),
       status: nextStatus ?? lessonForm.status
     };
 
@@ -270,6 +285,7 @@ export function TrainingsCMS() {
     if (!selectedLesson) {
       setSelectedLessonID(null);
     }
+
     setMessage(selectedLesson ? "Lesson updated." : "Lesson created.");
     await loadContent();
   }
@@ -289,6 +305,7 @@ export function TrainingsCMS() {
     if (selectedLessonID === id) {
       setSelectedLessonID(null);
     }
+
     setMessage("Lesson deleted.");
     await loadContent();
   }
@@ -305,10 +322,12 @@ export function TrainingsCMS() {
     const current = items[index];
     const target = items[swapIndex];
     const supabase = createSupabaseBrowserClient();
+
     const [first, second] = await Promise.all([
       supabase.from("training_lessons").update({ sort_order: target.sort_order }).eq("id", current.id),
       supabase.from("training_lessons").update({ sort_order: current.sort_order }).eq("id", target.id)
     ]);
+
     setSaving(false);
 
     if (first.error || second.error) {
@@ -327,7 +346,7 @@ export function TrainingsCMS() {
       <section className="admin-manager-grid">
         <Card title="Training Modules" eyebrow="CMS">
           {loading ? (
-            <p>Loading training modules...</p>
+            <p>Loading trainings...</p>
           ) : trainings.length ? (
             <div className="admin-opportunity-list">
               {trainings.map((training) => (
@@ -335,13 +354,13 @@ export function TrainingsCMS() {
                   <div>
                     <strong>{training.title}</strong>
                     <p>{trainingCategoryLabel(training.category)}</p>
-                    <small>{contentStatusLabel(training.status)}</small>
+                    <small>{publicationLabel(training.status)}</small>
                   </div>
                   <div className="admin-opportunity-actions">
-                    <button type="button" className="ghost-button" onClick={() => moveTraining(training.id, -1)}>
+                    <button type="button" className="ghost-button" onClick={() => void moveTraining(training.id, -1)}>
                       Up
                     </button>
-                    <button type="button" className="ghost-button" onClick={() => moveTraining(training.id, 1)}>
+                    <button type="button" className="ghost-button" onClick={() => void moveTraining(training.id, 1)}>
                       Down
                     </button>
                     <button type="button" className="secondary-button" onClick={() => setSelectedTrainingID(training.id)}>
@@ -360,8 +379,8 @@ export function TrainingsCMS() {
         </Card>
 
         <Card
-          title={selectedTraining ? "Edit training module" : "New training module"}
-          eyebrow="Module"
+          title={selectedTraining ? "Edit training" : "New training"}
+          eyebrow="Training"
           action={
             selectedTraining ? (
               <button
@@ -383,7 +402,7 @@ export function TrainingsCMS() {
               <input
                 value={trainingForm.title}
                 onChange={(event) => setTrainingForm((current) => ({ ...current, title: event.target.value }))}
-                placeholder="What Is a PEO?"
+                placeholder="Discovery Mastery for PEO Sales"
               />
             </label>
             <label>
@@ -400,12 +419,28 @@ export function TrainingsCMS() {
               </select>
             </label>
             <label className="admin-form-span-2">
-              Summary
+              Summary / Description
               <textarea
                 rows={4}
                 value={trainingForm.summary}
                 onChange={(event) => setTrainingForm((current) => ({ ...current, summary: event.target.value }))}
-                placeholder="Short module summary for the training library."
+                placeholder="Short premium description shown on the training card and detail page."
+              />
+            </label>
+            <label className="admin-form-span-2">
+              Cover Image URL
+              <input
+                value={trainingForm.coverImageURL}
+                onChange={(event) => setTrainingForm((current) => ({ ...current, coverImageURL: event.target.value }))}
+                placeholder="https://cdn.example.com/training-cover.jpg"
+              />
+            </label>
+            <label className="admin-form-span-2">
+              Content URL
+              <input
+                value={trainingForm.contentURL}
+                onChange={(event) => setTrainingForm((current) => ({ ...current, contentURL: event.target.value }))}
+                placeholder="https://www.canva.com/design/... or PDF URL"
               />
             </label>
             <label>
@@ -413,14 +448,19 @@ export function TrainingsCMS() {
               <select
                 value={trainingForm.status}
                 onChange={(event) =>
-                  setTrainingForm((current) => ({ ...current, status: event.target.value as ContentStatus }))
+                  setTrainingForm((current) => ({
+                    ...current,
+                    status: event.target.value as "draft" | "published"
+                  }))
                 }
               >
-                {contentStatusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                {contentStatusOptions
+                  .filter((option) => option.value !== "archived")
+                  .map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
               </select>
             </label>
           </div>
@@ -431,17 +471,12 @@ export function TrainingsCMS() {
             <button type="button" onClick={() => void saveTraining("published")} disabled={saving}>
               Publish
             </button>
-            {selectedTraining?.status === "published" ? (
-              <button type="button" className="secondary-button" onClick={() => void saveTraining("draft")} disabled={saving}>
-                Unpublish
-              </button>
-            ) : null}
           </div>
         </Card>
       </section>
 
       <section className="admin-manager-grid">
-        <Card title="Lessons" eyebrow={selectedTraining ? selectedTraining.title : "Select a module first"}>
+        <Card title="Lessons" eyebrow={selectedTraining ? selectedTraining.title : "Select a training first"}>
           {selectedTraining ? (
             lessonsForSelectedTraining.length ? (
               <div className="admin-opportunity-list">
@@ -449,8 +484,8 @@ export function TrainingsCMS() {
                   <article key={lesson.id} className="admin-opportunity-row">
                     <div>
                       <strong>{lesson.title}</strong>
-                      <p>{lesson.action_step || "No action step yet."}</p>
-                      <small>{contentStatusLabel(lesson.status)}</small>
+                      <p>{lesson.video_url ? "Video lesson available" : lesson.action_step || "No action step yet."}</p>
+                      <small>{publicationLabel(lesson.status)}</small>
                     </div>
                     <div className="admin-opportunity-actions">
                       <button type="button" className="ghost-button" onClick={() => void moveLesson(lesson.id, -1)}>
@@ -470,10 +505,10 @@ export function TrainingsCMS() {
                 ))}
               </div>
             ) : (
-              <p>No lessons created for this module yet.</p>
+              <p>No lessons created for this training yet.</p>
             )
           ) : (
-            <p>Select a training module to manage its lessons.</p>
+            <p>Select a training to manage its optional lessons.</p>
           )}
         </Card>
 
@@ -501,7 +536,7 @@ export function TrainingsCMS() {
               <input
                 value={lessonForm.title}
                 onChange={(event) => setLessonForm((current) => ({ ...current, title: event.target.value }))}
-                placeholder="How to Open a Sales Conversation"
+                placeholder="How to lead the first discovery call"
               />
             </label>
             <label>
@@ -509,31 +544,44 @@ export function TrainingsCMS() {
               <select
                 value={lessonForm.status}
                 onChange={(event) =>
-                  setLessonForm((current) => ({ ...current, status: event.target.value as ContentStatus }))
+                  setLessonForm((current) => ({
+                    ...current,
+                    status: event.target.value as "draft" | "published"
+                  }))
                 }
               >
-                {contentStatusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                {contentStatusOptions
+                  .filter((option) => option.value !== "archived")
+                  .map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
               </select>
             </label>
             <label className="admin-form-span-2">
-              Lesson Body
+              Body
               <textarea
                 rows={8}
                 value={lessonForm.body}
                 onChange={(event) => setLessonForm((current) => ({ ...current, body: event.target.value }))}
-                placeholder="Core lesson body content"
+                placeholder="Optional text or markdown lesson content."
+              />
+            </label>
+            <label className="admin-form-span-2">
+              Video URL
+              <input
+                value={lessonForm.videoURL}
+                onChange={(event) => setLessonForm((current) => ({ ...current, videoURL: event.target.value }))}
+                placeholder="https://player.vimeo.com/... or hosted training video URL"
               />
             </label>
             <label className="admin-form-span-2">
               Action Step
               <textarea
                 rows={3}
-                value={lessonForm.action_step}
-                onChange={(event) => setLessonForm((current) => ({ ...current, action_step: event.target.value }))}
+                value={lessonForm.actionStep}
+                onChange={(event) => setLessonForm((current) => ({ ...current, actionStep: event.target.value }))}
                 placeholder="What should the rep do after this lesson?"
               />
             </label>
@@ -545,11 +593,6 @@ export function TrainingsCMS() {
             <button type="button" onClick={() => void saveLesson("published")} disabled={saving || !selectedTrainingID}>
               Publish
             </button>
-            {selectedLesson?.status === "published" ? (
-              <button type="button" className="secondary-button" onClick={() => void saveLesson("draft")} disabled={saving}>
-                Unpublish
-              </button>
-            ) : null}
           </div>
         </Card>
       </section>

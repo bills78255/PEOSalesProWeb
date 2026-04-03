@@ -1,52 +1,54 @@
+import type { Route } from "next";
+import Link from "next/link";
+
 import { Card } from "@/components/ui/card";
 import { PageIntro } from "@/components/ui/page-intro";
-import { trainingCategoryLabel, type TrainingLessonRecord, type TrainingRecord } from "@/lib/cms";
+import { trainingCategoryLabel, type TrainingRecord } from "@/lib/cms";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function TrainingPage() {
   const supabase = await createSupabaseServerClient();
-  const [trainingsResult, lessonsResult] = await Promise.all([
-    supabase.from("trainings").select("*").eq("status", "published").order("sort_order", { ascending: true }),
-    supabase.from("training_lessons").select("*").eq("status", "published").order("sort_order", { ascending: true })
-  ]);
+  const { data, error } = await supabase
+    .from("trainings")
+    .select("*")
+    .eq("status", "published")
+    .order("sort_order", { ascending: true });
 
-  const trainings = (trainingsResult.data as TrainingRecord[]) ?? [];
-  const lessons = (lessonsResult.data as TrainingLessonRecord[]) ?? [];
+  const trainings = (data as TrainingRecord[]) ?? [];
 
   return (
     <div className="page-stack">
       <PageIntro
         eyebrow="Training"
-        title="Training library"
-        description="Published training modules and lessons are managed in the admin CMS and surfaced here for reps."
+        title="Premium training library"
+        description="Modern training modules built from Canva and external content, with optional lessons layered underneath."
       />
-      {trainingsResult.error || lessonsResult.error ? (
+      {error ? (
         <Card title="Unable to load training content">
-          <p>{trainingsResult.error?.message ?? lessonsResult.error?.message}</p>
+          <p>{error.message}</p>
         </Card>
       ) : trainings.length ? (
-        <section className="content-grid">
-          {trainings.map((training) => {
-            const moduleLessons = lessons.filter((lesson) => lesson.training_id === training.id);
-
-            return (
-              <Card key={training.id} title={training.title} eyebrow={trainingCategoryLabel(training.category)}>
-                <p>{training.summary}</p>
-                {moduleLessons.length ? (
-                  <ul className="stack-list">
-                    {moduleLessons.map((lesson) => (
-                      <li key={lesson.id}>
-                        <strong>{lesson.title}</strong>
-                        {lesson.action_step ? ` - ${lesson.action_step}` : ""}
-                      </li>
-                    ))}
-                  </ul>
+        <section className="training-grid">
+          {trainings.map((training) => (
+            <Link key={training.id} href={`/training/${training.slug}` as Route} className="training-card-link">
+              <article className="training-card">
+                {training.cover_image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={training.cover_image_url} alt={training.title} className="training-card-image" />
                 ) : (
-                  <p>No published lessons are attached yet.</p>
+                  <div className="training-card-image training-card-image--placeholder">
+                    <span>{trainingCategoryLabel(training.category)}</span>
+                  </div>
                 )}
-              </Card>
-            );
-          })}
+                <div className="training-card-body">
+                  <span className="marketplace-badge featured">{trainingCategoryLabel(training.category)}</span>
+                  <h3>{training.title}</h3>
+                  <p>{training.summary}</p>
+                  <span className="ghost-link">Open training</span>
+                </div>
+              </article>
+            </Link>
+          ))}
         </section>
       ) : (
         <Card title="No published training yet">
