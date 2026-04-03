@@ -1,9 +1,16 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { Card } from "@/components/ui/card";
 import { PageIntro } from "@/components/ui/page-intro";
 
-const sections = [
+type AdminSection = {
+  href: Route;
+  title: string;
+  description: string;
+};
+
+const sections: AdminSection[] = [
   {
     href: "/admin/trainings",
     title: "Trainings",
