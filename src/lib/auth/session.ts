@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import type { AppRole } from "@/lib/auth/roles";
+import { appRoles, type AppRole } from "@/lib/auth/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type AppProfile = {
@@ -10,6 +10,27 @@ export type AppProfile = {
   role: AppRole;
   title?: string | null;
 };
+
+type ProfileRoleJoin = { slug: string | null } | Array<{ slug: string | null }> | null;
+
+type ProfileRow = {
+  id: string;
+  email: string;
+  full_name: string;
+  title?: string | null;
+  roles: ProfileRoleJoin;
+};
+
+function normalizeRoleSlug(roles: ProfileRoleJoin): AppRole | null {
+  const joinedRole = Array.isArray(roles) ? roles[0] : roles;
+  const slug = joinedRole?.slug;
+
+  if (slug && appRoles.includes(slug as AppRole)) {
+    return slug as AppRole;
+  }
+
+  return null;
+}
 
 export async function getCurrentAppUser() {
   const supabase = await createSupabaseServerClient();
@@ -23,17 +44,19 @@ export async function getCurrentAppUser() {
     .from("profiles")
     .select("id,email,full_name,title,roles!inner(slug)")
     .eq("id", user.id)
-    .single();
+    .single<ProfileRow>();
+
+  const role = profile ? normalizeRoleSlug(profile.roles) : null;
 
   return {
     user,
-    profile: profile
+    profile: profile && role
       ? {
           id: profile.id,
           email: profile.email,
           full_name: profile.full_name,
           title: profile.title,
-          role: profile.roles.slug as AppRole
+          role
         }
       : null
   };
