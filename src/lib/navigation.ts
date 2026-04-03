@@ -1,7 +1,9 @@
+import type { Route } from "next";
+
 import type { AppRole } from "@/lib/auth/roles";
 
 export type NavItem = {
-  href: string;
+  href: Route;
   label: string;
   roles?: AppRole[];
 };
